@@ -48,6 +48,9 @@ public class OnheapSlabBenchmark {
     public static final int DEFAULT_NO_OF_SEGMENTS = 10;
     public static final int DEFAULT_CAPACITY_PER_SEGMENT = 1024 * 1024 * 1024;
 
+    public static final int DEFAULT_MIN_OBJECT_SIZE = 1000;
+    public static final int DEFAULT_MAX_OBJECT_SIZE = 2000;
+
     private static final long GB = 1024 * 1024 * 1024;
     private static final long MB = 1024 * 1024;
 
@@ -59,6 +62,8 @@ public class OnheapSlabBenchmark {
     private String type;
 
     private Map<Integer, byte[]> map;
+    private int minObjectSize;
+    private int maxObjectSize;
 
     private int opsPerInvocation;
 
@@ -72,7 +77,28 @@ public class OnheapSlabBenchmark {
         } else {
             opsPerInvocation = DEFAULT_OPERATIONS_PER_INVOCATION;
         }
+
+        configureObjectSize();
+
         map = createMap();
+    }
+
+    private void configureObjectSize() {
+        minObjectSize = Integer.getInteger("minObjectSize", DEFAULT_MIN_OBJECT_SIZE);
+        maxObjectSize = Integer.getInteger("maxObjectSize", DEFAULT_MAX_OBJECT_SIZE);
+
+        if (maxObjectSize < minObjectSize) {
+            throw new RuntimeException("Max Object Size cannot be < Max Object Size. " +
+                    "Configured Max Object Size: "+maxObjectSize+", Configured Min Object Size: "+minObjectSize);
+        }
+
+        if (maxObjectSize <= 0) {
+            throw new RuntimeException("Max Object Size must be > 0. Configured Max Object size: "+maxObjectSize);
+        }
+
+        if (minObjectSize < 0) {
+            throw new RuntimeException("Min Object Size must be >= 0. Configured Min Object size: "+minObjectSize);
+        }
     }
 
     @TearDown(Level.Trial)
@@ -158,7 +184,7 @@ public class OnheapSlabBenchmark {
     private byte[] buildEntity() {
         try {
             Entity entity = new Entity();
-            entity.foo = new byte[1000 + random.nextInt(1000)];
+            entity.foo = new byte[minObjectSize + random.nextInt(maxObjectSize - minObjectSize + 1)];
             BufferObjectDataOutput objectDataOutput = serializationService.createObjectDataOutput(2100);
             objectDataOutput.writeObject(entity);
             byte[] buffer = objectDataOutput.getBuffer();

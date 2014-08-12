@@ -11,10 +11,15 @@ noOfSegments=100
 #number of iterations per a single @benchmark method invocation. Each iteration will add a unique entry.
 operationsPerInvocation=48643200
 
+#approximate generated object size
+minObjectSize=1000
+maxObjectSize=2000
+
+#heap sizing for forked JVM
 Xmx=230g
 Xms=230g
 
-PROPERTIES="-DnoOfSegments=${noOfSegments} -Dcapacity=${capacity}"
+PROPERTIES="-DnoOfSegments=${noOfSegments} -Dcapacity=${capacity}  -DmaxObjectSize=${maxObjectSize} -DminObjectSize=${minObjectSize}"
 JVM_OPTS="-Xmx${Xmx} -Xms${Xms}"
 
 echo Fork Properties: $PROPERTIES
