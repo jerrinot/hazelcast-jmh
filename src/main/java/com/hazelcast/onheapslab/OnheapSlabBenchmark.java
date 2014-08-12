@@ -45,8 +45,11 @@ import java.util.Random;
 public class OnheapSlabBenchmark {
 
     public static final int DEFAULT_OPERATIONS_PER_INVOCATION = 3221200;
-    public static final int DEFAULT_NO_OF_SEGMENTS = 6;
+    public static final int DEFAULT_NO_OF_SEGMENTS = 10;
     public static final int DEFAULT_CAPACITY_PER_SEGMENT = 1024 * 1024 * 1024;
+
+    private static final long GB = 1024 * 1024 * 1024;
+    private static final long MB = 1024 * 1024;
 
     private final Random random = new Random();
 
@@ -57,19 +60,19 @@ public class OnheapSlabBenchmark {
 
     private Map<Integer, byte[]> map;
 
-    int opsPerInvocation;
+    private int opsPerInvocation;
 
     @Setup(Level.Trial)
     public void benchmarkSetup(BenchmarkParams params) {
         serializationService = new SerializationServiceBuilder()
                 .addDataSerializableFactory(1000, new EntityDataSerializableFactory())
                 .setAllowUnsafe(true).setUseNativeByteOrder(true).build();
-        map = createMap();
         if (params != null) {
             opsPerInvocation = params.getOpsPerInvocation();
         } else {
             opsPerInvocation = DEFAULT_OPERATIONS_PER_INVOCATION;
         }
+        map = createMap();
     }
 
     @TearDown(Level.Trial)
@@ -87,9 +90,9 @@ public class OnheapSlabBenchmark {
     public Map<Integer, byte[]> createMap() {
         Map<Integer, byte[]> map;
         if ("SLAB".equals(type)) {
-            map = new SlapMap(false, opsPerInvocation + 100, getNoOfSegmets(), getCapacityOfSegment());
+            map = new SlapMap(false, opsPerInvocation + 100, getNoOfSegmets(), getCapacityPerSegment());
         } else if ("OFFHEAP".equals(type)) {
-            map = new SlapMap(true, opsPerInvocation + 100, getNoOfSegmets(), getCapacityOfSegment());
+            map = new SlapMap(true, opsPerInvocation + 100, getNoOfSegmets(), getCapacityPerSegment());
         } else if ("JDK".equals(type)) {
             map = new HashMap<Integer, byte[]>();
         } else {
@@ -102,8 +105,31 @@ public class OnheapSlabBenchmark {
         return Integer.getInteger("noOfSegments", DEFAULT_NO_OF_SEGMENTS);
     }
 
-    private int getCapacityOfSegment() {
-        return Integer.getInteger("capacityOfSegment", DEFAULT_CAPACITY_PER_SEGMENT);
+    private int getCapacityPerSegment() {
+        String capacityString = System.getProperty("capacity");
+        if (capacityString == null || capacityString.isEmpty()) {
+            return DEFAULT_CAPACITY_PER_SEGMENT;
+        }
+
+        long totalCapacity;
+        if (capacityString.endsWith("g")) {
+            capacityString = capacityString.substring(0, capacityString.length() - 1);
+            totalCapacity = Long.parseLong(capacityString) * GB;
+        } else if (capacityString.endsWith("m")) {
+            capacityString = capacityString.substring(0, capacityString.length() - 1);
+            totalCapacity = Long.parseLong(capacityString) * MB;
+        } else {
+            totalCapacity = Long.parseLong(capacityString);
+        }
+
+        int noOfSegmets = getNoOfSegmets();
+        long capacityPerSegment = (totalCapacity + noOfSegmets - 1) / noOfSegmets;
+        if (capacityPerSegment > Integer.MAX_VALUE) {
+            throw new RuntimeException("Capacity per segment cannot be more than Integer.MAX_VALUE. " +
+                    "Total Capacity configured as "+totalCapacity+", no. of segments: "+ noOfSegmets +"" +
+                    ". It means capacity per segment would be "+capacityPerSegment+" which is more than "+Integer.MAX_VALUE);
+        }
+        return (int) capacityPerSegment;
     }
 
     @Benchmark
